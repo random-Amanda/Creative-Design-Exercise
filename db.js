@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 
 const MOCK_FILE = path.resolve("mock_responses.txt");
-const dbPath = process.env.DATABASE_FILE || './data/chat_history_ex5.db';
+const dbPath = process.env.DATABASE_FILE || 'chat_history_ex5.db';
 
 const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
