@@ -1,0 +1,442 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>GenAI Agent</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> -->
+</head>
+
+<style>
+    h3 {
+        margin-top: 0.5rem;
+        margin-bottom: 0.25rem;
+    }
+
+    p {
+        margin-top: 0.25rem;
+        margin-bottom: 0.25rem;
+    }
+
+    ul {
+        margin-left: 1rem;
+    }
+
+    .typing-indicator {
+        display: inline-block;
+        vertical-align: middle;
+    }
+
+    .typing-indicator span {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        margin: 0 1px;
+        background: #64748b;
+        border-radius: 50%;
+        opacity: 0.6;
+        animation: typing-bounce 1s infinite;
+    }
+
+    .typing-indicator span:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+
+    .typing-indicator span:nth-child(3) {
+        animation-delay: 0.4s;
+    }
+
+    @keyframes typing-bounce {
+
+        0%,
+        80%,
+        100% {
+            transform: translateY(0);
+            opacity: 0.6;
+        }
+
+        40% {
+            transform: translateY(-8px);
+            opacity: 1;
+        }
+    }
+</style>
+
+<body class="bg-slate-50 text-slate-900">
+    <!-- Landing Page Overlay -->
+    <div id="landing" class="fixed inset-0 flex items-center justify-center bg-slate-900 bg-opacity-70 z-50">
+        <div class="w-full max-w-xs sm:max-w-sm max-h-[100vh] overflow-y-auto flex justify-center items-center">
+            <form id="landingForm"
+                class="mt-8 sm:mt-12 bg-white rounded-xl shadow-lg p-4 sm:p-6 flex flex-col gap-4 w-full text-sm">
+                <div class="flex justify-center items-center gap-2 mb-4">
+                    <img src="assets/logo_unioulu_eng.png" alt="University Logo"
+                        class="max-h-28 w-auto object-contain" />
+                </div>
+                <h1 class="text-base font-bold mb-2">Creative Design Exercise 5</h1>
+                <h2 class="text-base mb-1">Enter your details</h2>
+                <input id="nameInput" class="border rounded-xl px-3 py-2" placeholder="Your Name" required
+                    maxlength="100" pattern="[A-Za-z\s]+"
+                    title="No digits or special characters (max 100 characters)" />
+                <input id="idInput" class="border rounded-xl px-3 py-2" placeholder="Last 4 digits of your student ID"
+                    required maxlength="4" pattern="\d{4}" inputmode="numeric" title="Enter 4 digits" />
+                <div>
+                    <label for="groupSelect" class="font-semibold mb-1 block">Group Number:</label>
+                    <select id="groupSelect" class="border rounded-xl px-3 py-2 w-full" required>
+                        <option value="" disabled selected>Select Group</option>
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                </div>
+                <div>
+                    <label class="font-semibold mb-1 block">Group Member:</label>
+                    <label class="inline-flex items-center mr-4">
+                        <input type="radio" name="member" id="member1" value="A" required class="mr-1" />
+                        A
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="member" id="member2" value="B" required class="mr-1" />
+                        B
+                    </label>
+                </div>
+                <!-- Terms and Conditions Section -->
+                <div>
+                    <label class="font-semibold mb-1 block">I have read and agree to the <a href="consent.html"
+                            class="underline text-blue-600">terms and conditions.</a></label>
+                    <label class="inline-flex items-center mr-4">
+                        <input type="radio" name="consent" id="consentYes" value="Yes" required class="mr-1" />
+                        Yes
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="consent" id="consentNo" value="No" required class="mr-1" />
+                        No
+                    </label>
+                </div>
+                <button class="px-4 py-2 rounded-xl bg-slate-900 text-white">Start Chat</button>
+            </form>
+        </div>
+    </div>
+    <!-- Chat Form Section -->
+    <div class="max-w-3xl mx-auto p-4" id="chatContainer" style="display:none;">
+        <h1 id="chatTitle" class="text-2xl font-bold mb-4">GenAI Agent</h1>
+
+        <div id="chat" class="space-y-3 mb-4 max-h-[70vh] overflow-auto p-3 bg-white rounded-xl shadow">
+
+        </div>
+
+        <form id="form" class="flex gap-2">
+            <textarea id="input" class="flex-1 border rounded-xl px-3 py-2 resize-y min-h-[40px] max-h-40"
+                placeholder="Type your message…" autocomplete="off"></textarea>
+            <button class="px-4 py-2 rounded-xl bg-slate-900 text-white" aria-label="Send">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5 m-0">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+            </button>
+        </form>
+    </div>
+
+    <script>
+        const chatEl = document.getElementById("chat");
+        const form = document.getElementById("form");
+        const input = document.getElementById("input");
+        // Landing page logic
+        const landing = document.getElementById("landing");
+        const landingForm = document.getElementById("landingForm");
+        const nameInput = document.getElementById("nameInput");
+        const idInput = document.getElementById("idInput");
+        const chatContainer = document.getElementById("chatContainer");
+        const memberSelect = document.getElementById("memberSelect");
+
+        function updateChatTitle(group, member, name, id) {
+            const chatTitle = document.getElementById("chatTitle");
+            let groupNum = "";
+            if (group && group.startsWith("group")) {
+                groupNum = group.replace("group", "");
+            } else if (group) {
+                groupNum = group;
+            }
+            let memberLabel = member ? ` - Member ${member}` : "";
+            let nameIdLabel = name && id ? ` - ${name} [${id}]` : "";
+            if (groupNum) {
+                chatTitle.innerHTML = `<span class="inline-block bg-slate-900 text-white rounded px-8 py-2 mr-2 text-2xl font-bold">GenAI Agent</span>
+        <span class="align-middle"> Group ${groupNum}${memberLabel}${nameIdLabel}`;
+            } else {
+                chatTitle.textContent = "GenAI Agent Chat";
+            }
+        }
+
+        landingForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const group = document.getElementById("groupSelect").value;
+            const member = document.querySelector('input[name="member"]:checked')?.value;
+            const name = nameInput.value.trim();
+            const id = idInput.value.trim();
+            const consent = document.querySelector('input[name="consent"]:checked')?.value;
+
+            if (!name || !id || !group || !consent) return;
+
+            localStorage.setItem("chatName", name);
+            localStorage.setItem("chatID", id);
+            localStorage.setItem("chatGroup", group);
+            localStorage.setItem("chatMember", member);
+            localStorage.setItem("chatConsent", consent);
+
+            landing.style.display = "none";
+            chatContainer.style.display = "";
+
+            //  Load previous chat history
+            try {
+                const res = await fetch("/api/load-chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name, student_id: id, group, member, consent })
+                });
+                const data = await res.json();
+
+                updateChatTitle(data.group, data.member, data.name, data.student_id);
+
+                chatEl.innerHTML = ""; // clear old chat
+
+                if (data?.messages?.length) {
+                    data.messages.forEach(msg => {
+                        addBubble(msg.role, msg.content);
+                    });
+                }
+            } catch (err) {
+                console.error("Error loading history:", err);
+            }
+        });
+
+        async function populateGroupOptions() {
+            const groupSelect = document.getElementById("groupSelect");
+            // Remove all options except the first (placeholder)
+            groupSelect.innerHTML = '<option value="" disabled selected>Select Group</option>';
+
+            try {
+                const res = await fetch("/api/config");
+                const config = await res.json();
+                const start = Number(config.GROUPS_STARTING_ID) || 1;
+                const count = 18;
+                for (let i = start; i < start + count; i++) {
+                    const opt = document.createElement("option");
+                    opt.value = i;
+                    opt.textContent = `Group ${i}`;
+                    groupSelect.appendChild(opt);
+                }
+            } catch (err) {
+                // fallback: default groups
+                for (let i = 1; i <= 18; i++) {
+                    const opt = document.createElement("option");
+                    opt.value = i;
+                    opt.textContent = `Group ${i}`;
+                    groupSelect.appendChild(opt);
+                }
+            }
+        }
+
+        window.addEventListener("DOMContentLoaded", () => {
+            // Clear any previous login/session data
+            localStorage.removeItem("chatName");
+            localStorage.removeItem("chatID");
+            localStorage.removeItem("chatGroup");
+            localStorage.removeItem("chatMember");
+
+            populateGroupOptions();
+
+            // Show login form, hide chat container
+            landing.style.display = "";
+            chatContainer.style.display = "none";
+        });
+
+        const messages = [
+            { role: "system", content: "You are a helpful assistant." }
+        ];
+
+        function addBubble(role, text) {
+            const wrap = document.createElement("div");
+            wrap.className = role === "user" ? "flex justify-end" : "flex justify-start";
+
+            const bubble = document.createElement("div");
+            bubble.className = "max-w-[80%] px-3 py-2 rounded-2xl shadow " +
+                (role === "user" ? "bg-slate-900 text-white" : "bg-slate-100");
+            if (role === "assistant") {
+                bubble.innerHTML = formatMessage(text);
+            } else {
+                bubble.textContent = text;
+            }
+
+            wrap.appendChild(bubble);
+            chatEl.appendChild(wrap);
+            chatEl.scrollTop = chatEl.scrollHeight;
+            return bubble;
+        }
+
+        function addTypingIndicator() {
+            const wrap = document.createElement("div");
+            wrap.className = "flex justify-start";
+            const bubble = document.createElement("div");
+            bubble.className = "max-w-[80%] px-3 py-2 rounded-2xl shadow bg-slate-100";
+            bubble.innerHTML = `
+      <span class="typing-indicator">
+        <span></span><span></span><span></span>
+      </span>
+      <span class="ml-2 text-slate-500"></span>
+    `;
+            wrap.appendChild(bubble);
+            chatEl.appendChild(wrap);
+            chatEl.scrollTop = chatEl.scrollHeight;
+            return wrap;
+        }
+
+        function removeTypingIndicator(indicatorNode) {
+            if (indicatorNode && indicatorNode.parentNode) {
+                indicatorNode.parentNode.removeChild(indicatorNode);
+            }
+        }
+
+        async function sendNonStreaming() {
+            const group = localStorage.getItem("chatGroup");
+            const name = localStorage.getItem("chatName");
+            const student_id = localStorage.getItem("chatID");
+            const member = localStorage.getItem("chatMember");
+            const seenMockKey = `mockSeen_${student_id}_${group}_${member}`;
+            const seenMockIds = JSON.parse(localStorage.getItem(seenMockKey) || "[]");
+            const res = await fetch("http://localhost:3000/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ messages, group, name, student_id, member, seen_mock_ids: seenMockIds })
+            });
+            if (!res.ok) throw new Error(await res.text());
+            const data = await res.json();
+            if (data.id) {
+                seenMockIds.push(data.id);
+                localStorage.setItem(seenMockKey, JSON.stringify(seenMockIds));
+            }
+            return data.content || "";
+        }
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const userText = input.value.trim();
+            if (!userText) return;
+
+            // push user message
+            messages.push({ role: "user", content: userText });
+            addBubble("user", userText);
+            input.value = "";
+
+            const typingNode = addTypingIndicator();
+
+            let assistantNode;
+            try {
+                // Wait for response, then remove typing indicator
+                const final = await sendNonStreaming();
+                removeTypingIndicator(typingNode);
+                assistantNode = addBubble("assistant", final);
+                messages.push({ role: "assistant", content: final });
+            } catch (err) {
+                removeTypingIndicator(typingNode);
+                assistantNode = addBubble("assistant", "Error: " + err.message);
+            }
+        });
+
+        // function formatMessage(text) {
+        //     if (!text) return "";
+        //     // marked automatically escapes HTML and converts markdown to HTML
+        //     return marked.parse(text.trim());
+        // }
+
+        function formatMessage(text) {
+            if (!text) return "";
+
+            // Escape HTML
+            const escapeHtml = (str) =>
+                str.replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;");
+
+            safe = escapeHtml(text.trim());
+
+            safe = safe.replace(/\\n/g, "\n");
+
+            // Headings (### 1. Title or ### Title)
+            safe = safe.replace(/^###\s*(.*?)$/gm, "<h3 class='font-bold text-lg mt-5 mb-2'>$1</h3>");
+
+            // Bold (**text**)
+            safe = safe.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+            // Bullet points (- item)
+            // Convert lines starting with "-" or "*" to <li>
+            safe = safe.replace(/^\s*[-*]\s+(.*)$/gm, "<li>$1</li>");
+
+            // Group consecutive <li> items into <ul>
+            safe = safe.replace(/(<li>[\s\S]*?<\/li>)(\s*(<li>[\s\S]*?<\/li>))+/g, (match) => {
+                return `<ul class="list-disc list-inside space-y-1 mt-1 mb-3">${match}</ul>`;
+            });
+
+            // Markdown table formatting
+            safe = safe.replace(
+                // Match markdown tables
+                /((?:\|.*\|\n)+)/g,
+                (tableBlock) => {
+                    // Split lines and filter out empty ones
+                    const lines = tableBlock.trim().split('\n').filter(line => line.trim());
+                    if (lines.length < 2) return tableBlock; // Not a valid table
+
+                    // Remove separator line (second line)
+                    const header = lines[0];
+                    const separator = lines[1];
+                    const rows = lines.slice(2);
+
+                    // Get headers
+                    const headers = header.split('|').map(h => h.trim()).filter(h => h);
+
+                    // Build table HTML
+                    let html = '<table class="min-w-full border border-slate-300 my-3 text-sm"><thead><tr>';
+                    headers.forEach(h => {
+                        html += `<th class="border px-2 py-1 bg-slate-100 font-semibold">${h}</th>`;
+                    });
+                    html += '</tr></thead><tbody>';
+
+                    rows.forEach(row => {
+                        const cols = row.split('|').map(c => c.trim()).filter(c => c);
+                        if (cols.length === headers.length) {
+                            html += '<tr>';
+                            cols.forEach(c => {
+                                // Bold cell if wrapped in **
+                                if (/^\*\*(.*)\*\*$/.test(c)) {
+                                    c = `<strong>${c.replace(/^\*\*(.*)\*\*$/, '$1')}</strong>`;
+                                }
+                                html += `<td class="border px-2 py-1">${c}</td>`;
+                            });
+                            html += '</tr>';
+                        }
+                    });
+
+                    html += '</tbody></table>';
+                    return html;
+                }
+            );
+
+            // Paragraph breaks (two or more newlines)
+            safe = safe.replace(/\n{2,}/g, "</p><p>");
+
+            // Wrap the whole thing in <p> ... </p>
+            safe = `<p>${safe}</p>`;
+
+            // Clean up invalid <p> around lists/headings
+            safe = safe
+                .replace(/<p>\s*(<h3.*?>)/g, "$1")
+                .replace(/(<\/h3>)\s*<\/p>/g, "$1")
+                .replace(/<p>\s*(<ul.*?>)/g, "$1")
+                .replace(/(<\/ul>)\s*<\/p>/g, "$1")
+                .replace(/<p>\s*(<table.*?>)/g, "$1")
+                .replace(/(<\/table>)\s*<\/p>/g, "$1");
+
+            return safe.trim();
+        }
+
+    </script>
+</body>
+
+</html>
